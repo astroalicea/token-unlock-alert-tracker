@@ -18,5 +18,5 @@ python main.py
 
 Add tokens to track by editing the `WATCHLIST` list in `config.py`.
 
-Run the tests with `pytest -v` — all 15 should pass before you trust
+Run the tests with `pytest -v` — all 29 should pass before you trust
 any change to `scraper.py` or `db.py`.

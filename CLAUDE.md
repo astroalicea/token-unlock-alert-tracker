@@ -70,7 +70,19 @@ loop" below.)
 - DefiLlama `/unlocks/{slug}` page — depends on the `__NEXT_DATA__`
   script tag existing and containing `props.pageProps.emissions
   .upcomingEvent` and `props.pageProps.emissions.meta`.
-  Last verified working: 2026-10-01.
+  Last verified working: 2026-10-08 (live arbitrum parse).
+- `noOfTokens` shape differs by unlock type (fixed 2026-10-08): cliff
+  events are `[amount]` (one element), linear events are
+  `[old_rate, new_rate]`. The original parser treated everything as a
+  before/after pair, so every cliff computed as 0 tokens (arbitrum,
+  celo, zksync-era were stored as 0.0). Handled in
+  `_event_token_range()`. `upcomingEvent` can also hold several events
+  at the same timestamp (e.g. insiders + privateSale) and isn't
+  guaranteed sorted — the parser takes the min timestamp and sums.
+  Malformed entries now raise ScrapeError instead of KeyError.
+- Telegram messages use `parse_mode: "HTML"` with `html.escape()` on
+  every dynamic field. Markdown mode broke on `__NEXT_DATA__` in error
+  text, so failure alerts silently couldn't send (fixed 2026-10-08).
 - If `upcomingEvent` moves or is renamed, check `extract_next_data()`'s
   raised error message — it tells you which key went missing.
 - DefiLlama may occasionally 503 on the first unlocks-related sub-request
