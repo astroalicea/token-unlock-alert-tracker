@@ -88,3 +88,64 @@ def test_parse_upcoming_unlock_returns_none_when_no_upcoming_event():
     }
     event = parse_upcoming_unlock(data, slug="fully-unlocked-token", label="Test")
     assert event is None
+
+
+def _wrap_upcoming(upcoming: list) -> dict:
+    """Build a minimal __NEXT_DATA__ dict around an upcomingEvent list."""
+    return {
+        "props": {
+            "pageProps": {
+                "emissions": {
+                    "meta": {"circSupply": 1_000_000_000, "maxSupply": 10_000_000_000},
+                    "upcomingEvent": upcoming,
+                }
+            }
+        }
+    }
+
+
+def test_parse_cliff_with_single_element_no_of_tokens_is_not_zero():
+    """Regression: cliffs have noOfTokens=[amount]; this used to compute 0."""
+    data = _wrap_upcoming([
+        {"timestamp": 1792072833, "noOfTokens": [92_650_000],
+         "category": "insiders", "unlockType": "cliff"},
+    ])
+    event = parse_upcoming_unlock(data, slug="arbitrum", label="Arbitrum (ARB)")
+    assert event.tokens_unlocking == 92_650_000
+    assert event.percent_of_circulating == pytest.approx(9.265)
+
+
+def test_parse_merges_events_sharing_the_earliest_timestamp():
+    data = _wrap_upcoming([
+        {"timestamp": 1800000000, "noOfTokens": [10_000_000],
+         "category": "insiders", "unlockType": "cliff"},
+        {"timestamp": 1800000000, "noOfTokens": [5_000_000],
+         "category": "privateSale", "unlockType": "cliff"},
+    ])
+    event = parse_upcoming_unlock(data, slug="arbitrum", label="Arbitrum (ARB)")
+    assert event.tokens_unlocking == 15_000_000
+    assert event.category == "insiders+privateSale"
+    assert event.unlock_type == "cliff"
+
+
+def test_parse_picks_soonest_event_even_if_not_first():
+    data = _wrap_upcoming([
+        {"timestamp": 1900000000, "noOfTokens": [1], "unlockType": "cliff"},
+        {"timestamp": 1800000000, "noOfTokens": [2], "unlockType": "cliff"},
+    ])
+    event = parse_upcoming_unlock(data, slug="x", label="X")
+    assert event.timestamp == 1800000000
+    assert event.tokens_unlocking == 2
+
+
+def test_parse_raises_scrape_error_on_event_missing_timestamp():
+    """Regression: a raw KeyError here used to crash the whole run."""
+    data = _wrap_upcoming([{"noOfTokens": [1], "unlockType": "cliff"}])
+    with pytest.raises(ScrapeError, match="Malformed upcomingEvent"):
+        parse_upcoming_unlock(data, slug="x", label="X")
+
+
+def test_parse_raises_scrape_error_on_non_list_upcoming_event():
+    data = _wrap_upcoming({"timestamp": 1800000000})
+    with pytest.raises(ScrapeError, match="Malformed upcomingEvent"):
+        parse_upcoming_unlock(data, slug="x", label="X")

@@ -40,7 +40,15 @@ CREATE TABLE IF NOT EXISTS scrape_log (
 
 @contextmanager
 def get_connection(db_path: str = DB_PATH):
-    """Context-managed SQLite connection with foreign keys/row factory set."""
+    """Context-managed SQLite connection with sqlite3.Row row factory.
+
+    Commits on clean exit, always closes.
+
+    Args:
+        db_path: path to the SQLite file.
+    Returns:
+        (yields) an open sqlite3.Connection.
+    """
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
@@ -144,8 +152,19 @@ def log_scrape_result(
 
 
 def get_last_successful_scrape(slug: str, db_path: str = DB_PATH) -> dict | None:
-    """Fetch the most recent successfully-stored unlock event for a token,
-    used as a cache fallback when a live scrape fails."""
+    """Fetch the most recently *first-seen* stored unlock event for a token.
+
+    Not called anywhere yet — groundwork for a stale-cache fallback when
+    a live scrape fails. Note it orders by first_seen_at (when we first
+    stored the event), not by the last successful scrape time; join
+    against scrape_log if you need the latter.
+
+    Args:
+        slug: DefiLlama slug.
+        db_path: path to the SQLite file.
+    Returns:
+        the row as a dict, or None if nothing is stored for this slug.
+    """
     with get_connection(db_path) as conn:
         row = conn.execute(
             """
